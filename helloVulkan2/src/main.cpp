@@ -15,6 +15,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
+
 #include <vulkan/vulkan.hpp>
 
 #include <chrono>
@@ -25,26 +28,30 @@
 #include <fstream> 
 #include <cstdlib> 
 #include <optional>
+#include <unordered_map>
 
-#define TEXTURE_FILE_ "./textures/jinhsi.png"
+#define TEXTURE_FILE_ "./textures/cartethyia.png"
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
+#define VIKING_ROOM_MODEL_PATH "./models/viking_room.obj"
+#define VIKING_ROOM_TEXTURE_PATH "./textures/viking_room.png"
+
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 const std::vector<const char*> validation_layers = {
-    "VK_LAYER_KHRONOS_validation"
+    "VK_LAYER_KHRONOS_validation",
 };
 
 const std::vector<const char*> device_extensions = {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 };
 
 #define DEBUG 1
 
 #if DEBUG
-#define DEBUG 1
+#define DEBUG_PRINT_FUNC_NAME_WHEN_CALLED 1
 #endif
 
 #ifdef NDEBUG
@@ -131,24 +138,24 @@ struct UniformBufferObject
     glm::mat4 proj;
 };
 
-const std::vector<Vertex> vertices{
-    {{-0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-    {{0.5f, -0.5f, 0.0f},  {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-    {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-    {{-0.5f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
+// const std::vector<Vertex> vertices{
+//     {{-0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+//     {{0.5f, -0.5f, 0.0f},  {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+//     {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+//     {{-0.5f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
 
-    {{-0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-    {{0.5f, -0.5f, -0.5f},  {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-    {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-    {{-0.5f, 0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
-};
+//     {{-0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+//     {{0.5f, -0.5f, -0.5f},  {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+//     {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+//     {{-0.5f, 0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
+// };
 
-const std::vector<uint16_t> v_indices{
-    0, 1, 2, // triangle 
-    2, 3, 0, 
-    4, 5, 6, 
-    6, 7, 4
-};
+// const std::vector<uint16_t> v_indices{
+//     0, 1, 2, // triangle 
+//     2, 3, 0, 
+//     4, 5, 6, 
+//     6, 7, 4
+// };
 
 bool checkValidationLayerSupported()
 {
@@ -339,6 +346,9 @@ private:
     vk::CommandPool command_pool;
     std::vector<vk::CommandBuffer> command_buffers;
 
+    // geometry
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> v_indices;
     vk::Buffer vertex_buffer;
     vk::DeviceMemory vertex_buffer_memory;
     vk::Buffer index_buffer;
@@ -417,6 +427,8 @@ private:
         createTextureImageView();
         createTextureSampler();
 
+        // load model
+        loadModel();
         // vertex buffer index buffer
         createVertexBuffer();
         createIndexBuffer();
@@ -859,6 +871,44 @@ private:
         command_pool = device.createCommandPool(create_info);
     }
 
+    void loadModel()
+    {
+        tinyobj::attrib_t attrib;
+        std::vector<tinyobj::shape_t> shapes;
+        std::vector<tinyobj::material_t> materials;
+        std::string warn, err;
+
+        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, VIKING_ROOM_MODEL_PATH))
+        {
+            throw std::runtime_error(warn + err);
+        }
+
+        for (const auto& shape : shapes)
+        {
+            for (const auto& index : shape.mesh.indices)
+            {
+                Vertex vertex;
+                
+                vertex.pos = {
+                    attrib.vertices[3 * index.vertex_index + 0],
+                    attrib.vertices[3 * index.vertex_index + 1],
+                    attrib.vertices[3 * index.vertex_index + 2],
+                };
+
+                vertex.tex_coord = {
+                    attrib.texcoords[2 * index.texcoord_index + 0],
+                    1.0f - attrib.texcoords[2 * index.texcoord_index + 1],
+                    // attrib.texcoords[2 * index.texcoord_index + 1],
+                };
+
+                vertex.color = { 1.0f, 1.0f, 1.0f };
+
+                vertices.push_back(vertex);
+                v_indices.push_back(v_indices.size());
+            }
+        }
+    }
+
     void createVertexBuffer()
     {
         size_t size = sizeof(vertices[0]) * vertices.size();
@@ -1221,7 +1271,7 @@ private:
         // load image from disk
         int tex_width, tex_height, tex_channel;
 
-        stbi_uc* pixels = stbi_load(TEXTURE_FILE_, &tex_width, &tex_height, &tex_channel, STBI_rgb_alpha);
+        stbi_uc* pixels = stbi_load(VIKING_ROOM_TEXTURE_PATH, &tex_width, &tex_height, &tex_channel, STBI_rgb_alpha);
 
         vk::DeviceSize image_size = tex_width * tex_height * 4;
 
@@ -1410,7 +1460,7 @@ private:
                 vk::Buffer vertex_buffers[] = {vertex_buffer};
                 vk::DeviceSize offsets[] = {0};
                 command_buffer.bindVertexBuffers(0, vertex_buffer, offsets);
-                command_buffer.bindIndexBuffer(index_buffer, 0, vk::IndexType::eUint16);
+                command_buffer.bindIndexBuffer(index_buffer, 0, vk::IndexType::eUint32);
                 command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipeline_layout, 0, 1, &descriptor_sets[current_frame], 0, nullptr);
 
                 // command_buffer.draw((uint32_t) vertices.size(), 1, 0, 0);
@@ -1838,7 +1888,8 @@ private:
 
         auto current_time = std::chrono::high_resolution_clock::now();
 
-        float time = std::chrono::duration<float, std::chrono::seconds::period>(current_time - start_time).count();
+        // float time = std::chrono::duration<float, std::chrono::seconds::period>(current_time - start_time).count();
+        float time = 0.0f;
 
         UniformBufferObject ubo;
         ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
