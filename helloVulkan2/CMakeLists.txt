@@ -16,14 +16,14 @@ file(GLOB SOURCE_FILES
  ${CMAKE_CURRENT_SOURCE_DIR}/stb-master/stb_image.h
  )
 
-#  find_package(GTest REQUIRED)
+find_package(Vulkan REQUIRED)
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/stb-master)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/tinyobjloader)
 
 add_executable(vk2d ${SOURCE_FILES})
 
-#  target_link_libraries(vk2d GTest::GTest) 
-
+target_link_libraries(vk2d PRIVATE Vulkan::Vulkan)
 
 else()
 file(GLOB SOURCE_FILES 

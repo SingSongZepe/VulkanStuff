@@ -9,6 +9,8 @@
 #include <glm/vec4.hpp> // glm::vec4  
 #include <glm/mat4x4.hpp> // glm::mat4  
 #include <glm/gtc/matrix_transform.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/hash.hpp>
 
 // define the marco, then include the Defination of functions
 // otherwise only prototypes
@@ -60,6 +62,8 @@ const std::vector<const char*> device_extensions = {
     const bool enable_validation_layers = true;
 #endif
 
+#define DUPLICATED_VERTICES 0
+
 namespace utils
 {
 static std::vector<char> read_file(const std::string& filename)
@@ -80,7 +84,7 @@ static std::vector<char> read_file(const std::string& filename)
     file.close();
     return buffer;
 }   
-}
+} // namespace utils
 
 namespace vk2d
 {
@@ -90,7 +94,20 @@ struct Vertex
     glm::vec3 color;
     glm::vec2 tex_coord;
 
-public:        
+public:      
+    Vertex() {
+        pos = {0.0f, 0.0f, 0.0f};
+        color = {0.0f, 0.0f, 0.0f};
+        tex_coord = {0.0f, 0.0f};
+    };
+
+    bool operator==(const Vertex& other) const
+    {
+        return pos == other.pos 
+               && color == other.color 
+               && tex_coord == other.tex_coord; 
+    }
+
     static vk::VertexInputBindingDescription getBindingDescription()
     {
         vk::VertexInputBindingDescription binding_description;
@@ -128,7 +145,30 @@ public:
         return attribute_descriptions;
     }
 };
+}
 
+#if !DUPLICATED_VERTICES
+namespace std
+{
+    template<>
+    struct hash<vk2d::Vertex>
+    {
+        size_t operator()(vk2d::Vertex const& vertex) const 
+        {
+            // return  ((hash<glm::vec3>()(vertex.pos) ^ 
+            //         (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
+            //         (hash<glm::vec2>()(vertex.tex_coord) << 1);
+            
+            return hash<glm::vec3>()(vertex.pos) ^
+                   hash<glm::vec3>()(vertex.color) ^
+                   hash<glm::vec2>()(vertex.tex_coord);
+        }
+    };
+} // namespace std
+#endif
+
+namespace vk2d
+{
 struct UniformBufferObject
 {
     // glm::vec2 foo;
@@ -883,6 +923,10 @@ private:
             throw std::runtime_error(warn + err);
         }
 
+#       if !DUPLICATED_VERTICES
+        std::unordered_map<Vertex, uint32_t> unique_vertices;
+#       endif
+
         for (const auto& shape : shapes)
         {
             for (const auto& index : shape.mesh.indices)
@@ -903,8 +947,19 @@ private:
 
                 vertex.color = { 1.0f, 1.0f, 1.0f };
 
+#               if !DUPLICATED_VERTICES
+                if (unique_vertices.count(vertex) == 0)
+                {
+                    unique_vertices[vertex] = (uint32_t) vertices.size();
+                    vertices.push_back(vertex);
+                }
+                v_indices.push_back(unique_vertices[vertex]); 
+#               endif
+
+#               if DUPLICATED_VERTICES
                 vertices.push_back(vertex);
                 v_indices.push_back(v_indices.size());
+#               endif
             }
         }
     }
