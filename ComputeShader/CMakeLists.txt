@@ -23,7 +23,9 @@ if (MODE_TEST)
 
 else()
     file(GLOB SOURCE_FILES 
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/utils/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/global.h
     )
 
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)

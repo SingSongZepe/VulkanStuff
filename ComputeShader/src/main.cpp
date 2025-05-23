@@ -2,20 +2,19 @@
 #include <iostream>
 
 #include "instance_.h"
-#include "global.h"
 
 namespace cs
 {
 void initApplication()
 {
-    DEBUG_MESSAGE_NORMAL(initApplication);
+    DEBUG_MESSAGE_NORMAL("initApplication")
 
     Instance::init();
 }
 
 void quitApplication()
 {
-    DEBUG_MESSAGE_NORMAL(quitApplication);
+    DEBUG_MESSAGE_NORMAL("quitApplication");
 
     Instance::quit();
 }
